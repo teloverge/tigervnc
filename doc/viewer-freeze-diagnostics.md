@@ -138,3 +138,21 @@ from git). A Windows viewer build with the connection-progress diagnostics
 is required to distinguish incomplete updates from lack of incoming data.
 The Windows viewer diagnostics workflow packages the executable and its
 runtime libraries separately from the installed stock viewer.
+
+## Instrumented Windows viewer deployed
+
+The Windows viewer build succeeded for commit `14e413f1` in workflow run
+`37097327769`. The executable and its runtime DLLs are installed separately
+at `D:\Apps\TigerVNC-Diagnostics\14e413f1`. A desktop shortcut named
+**TigerVNC Instrumented Diagnostics** invokes the packaged launcher with
+`-Instrumented` and the new executable path. The stock viewer was preserved.
+
+Executable SHA256:
+`ca9035286d4a79f2373a401eb29247596a42250be7784859ccc728603920f020`.
+
+The real viewer integration test passed on pf-omen with the packaged Windows
+executable: idle state, partial update with responsive UI timers, and update
+completion on resumption were all recorded correctly. In that test, a paused
+update logged `updates=0 partial_update_ms=4001` and its resumption logged
+`updates=1 partial_update_ms=0`. This verifies the instrumentation, not a fix
+for the real Mac session freeze.
