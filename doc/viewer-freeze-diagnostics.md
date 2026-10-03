@@ -13,8 +13,12 @@ Branch: `viewer/freeze-diagnostics`.
 - No TigerVNC events were returned by the Application event-log query for
   the preceding seven days. CIM process inspection was denied; ordinary
   `Get-Process` provided the executable and version.
-- Stock viewer logging defaults to stderr. A file logger is available, but
-  must be selected with `-Log '*:file:30'` to retain session records.
+- Stock viewer logging defaults to stderr. In version 1.16.0, the file
+  logger uses the hard-coded `C:\temp\vncviewer.log`; the newer master source
+  honors TMP. The original launcher incorrectly assumed stock 1.16.0 also
+  honored TMP, so it displayed a session log path without producing a log.
+  The corrected launcher creates `C:\temp` and copies the stock file log
+  into the session folder while the viewer is running.
 
 No cause has been established and the actual Mac freeze has not been
 reproduced. The next step is to capture an affected session with timestamps,
@@ -90,3 +94,29 @@ DISPLAY=:91 python3 tests/integration/viewer-diagnostics.py build/vncviewer/vncv
 Use an isolated X display (e.g. Xvfb) and the viewer's runtime libraries.
 This validates the new instrumentation, not the reported Mac-specific bug.
 A Windows build and an affected Mac session are still needed for that.
+
+## Live zero-throughput observation (2026-10-02, approximately 23:15–23:18)
+
+The user observed zero updates/s, zero pixels/s, and zero incoming bits/s
+in the stock viewer's graph. Process 44096 reported responsive, with a TCP
+connection from pf-omen to `10.0.2.11:5900` in ESTABLISHED state. A separate
+unauthenticated connection to that endpoint received `RFB 003.889`.
+Neither result establishes that the existing session is updating. The user
+could not check the Mac's physical display, so an idle screen is not ruled
+out. No cause has been established.
+
+The launcher-created folder `20261002-230629-45728` contained no log file.
+The 1.16.0 hard-coded log directory `C:\temp` was absent and was created
+while the viewer was running, allowing later file-log messages to be saved
+there. This cannot recover earlier messages. A test of redirected stderr produced an empty file with the installed
+Windows GUI executable. A subsequent loopback connection-refusal test
+verified that the stock file logger writes to `C:\temp` once that directory
+exists. The corrected launcher creates that directory and copies each new
+session's file log into its session folder every second. It also records
+viewer responsiveness, CPU time, memory and TCP connection states every
+five seconds in `connection-state.log`. These process samples do not prove
+that framebuffer updates are arriving.
+
+A new `TigerVNC Diagnostics v2` shortcut points to
+`D:\Apps\TigerVNC\Start-ViewerDiagnostics-v2.ps1`. Close the old viewer
+session before using it, and leave the launcher running while connected.
