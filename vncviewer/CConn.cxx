@@ -1128,14 +1128,14 @@ void CConn::handleDiagnosticsTimeout(void *data)
 
   vlog.info("[ConnectionDiagnostics] interval_ms=%lld rx_bytes=%u "
             "updates=%u last_update_ms=%lld partial_update_ms=%lld "
-            "rx_buffered=%zu tx_buffered=%d processing=%d "
-            "protocol_state=%d consumed_bytes=%zu",
+            "rx_buffered=%llu tx_buffered=%d processing=%d "
+            "protocol_state=%d consumed_bytes=%llu",
             (long long)interval, position - self->diagnosticsPosition,
             updates - self->diagnosticsUpdates, (long long)updateAge,
-            partialAge, self->sock->inStream().avail(),
+            partialAge, (unsigned long long)self->sock->inStream().avail(),
             self->sock->outStream().hasBufferedData(),
             self->msgTimer.isStarted(), (int)self->state(),
-            self->sock->inStream().pos());
+            (unsigned long long)self->sock->inStream().pos());
 
   self->diagnosticsPosition = position;
   self->diagnosticsUpdates = updates;
