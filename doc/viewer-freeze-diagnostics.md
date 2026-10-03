@@ -181,3 +181,13 @@ pending request supports investigating server/network update delivery.
 Raw log snapshots are saved under `build/diagnostics/20261003-0009` locally.
 Windows may report stale size/timestamps for its still-open log file; the
 snapshot reads actual contents rather than relying on those attributes.
+
+The extended probes were built successfully for Windows in run
+`37099190043` at commit `278a0906`, then passed the real viewer integration
+test on pf-omen, including pending-request, registered-watch and empty-kernel
+readiness assertions during idle/paused updates. The existing **TigerVNC
+Instrumented Diagnostics** shortcut now selects
+`D:\Apps\TigerVNC-Diagnostics\278a0906\vncviewer.exe`.
+Executable SHA256:
+`199459a9a583401cc09db057ede8c44789f4d318a8d3cd27674eb5f1a9412b62`.
+The running previous executable was not replaced or interrupted.
