@@ -127,6 +127,9 @@ private:
   size_t updateStartPos;
   unsigned long long bpsEstimate;
 
+  bool readWatchActive;
+  unsigned socketEventCount;
+  unsigned diagnosticsSocketEvents;
   bool updateInProgress;
   unsigned diagnosticsPosition;
   unsigned diagnosticsUpdates;

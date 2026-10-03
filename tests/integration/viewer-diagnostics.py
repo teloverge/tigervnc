@@ -114,7 +114,14 @@ def main():
         assert partial[1] > 0, records
         assert resumed[2] == 1 and resumed[4] == 0 and resumed[1] > 0, records
         assert all(4000 <= row[0] <= 6500 for row in (idle, partial, resumed)), records
+        progress = re.findall(r'update_pending=(\d+) continuous=(\d+) '
+                              r'pixel_format_pending=(\d+) read_watch=(\d+) '
+                              r'socket_readable=(-?\d+) socket_events=(\d+)', text)
+        assert len(progress) >= 3, text
+        for row in progress[:3]:
+            assert row[:5] == ('1', '0', '0', '1', '0'), progress
         print('PASS: idle, partial update, resumed update; UI timers stayed active')
+        print('PASS: pending request, socket watch and kernel readiness recorded')
         for row in records:
             print('interval_ms=%s rx_bytes=%s updates=%s last_update_ms=%s partial_update_ms=%s' % row)
 

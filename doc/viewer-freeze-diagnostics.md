@@ -156,3 +156,28 @@ completion on resumption were all recorded correctly. In that test, a paused
 update logged `updates=0 partial_update_ms=4001` and its resumption logged
 `updates=1 partial_update_ms=0`. This verifies the instrumentation, not a fix
 for the real Mac session freeze.
+
+## Instrumented zero-throughput capture (2026-10-03, approximately 00:09)
+
+Session `20261002-235301-42548` used the instrumented Windows executable.
+The last completed update preceded the 00:08:58 record by 4381 ms (about
+00:08:54). From 00:09:03 through the initial read at 00:09:43, each sample
+reported zero new bytes and zero completed updates, no unfinished update,
+no unread socket-stream bytes, no buffered socket output and no scheduled
+message processing. Timer intervals stayed close to five seconds and the
+process remained responsive with TCP ESTABLISHED. This points away from
+an ongoing decoder hang, but does not distinguish server/session starvation,
+a network stall, or a lost socket-read callback. Earlier zero-traffic samples
+at 00:08:08–00:08:18 were followed by resumed updates at 00:08:23; zero traffic
+alone is therefore not a sufficient freeze detector.
+
+The next diagnostics add read-only protocol progress (pending update,
+continuous-update mode, pending pixel-format change), socket callback counts,
+a tracked read-watch registration and a zero-timeout select probe of kernel
+readiness. The select probe does not consume data. A ready socket with no
+callbacks supports investigating event dispatch; an empty socket with a
+pending request supports investigating server/network update delivery.
+
+Raw log snapshots are saved under `build/diagnostics/20261003-0009` locally.
+Windows may report stale size/timestamps for its still-open log file; the
+snapshot reads actual contents rather than relying on those attributes.

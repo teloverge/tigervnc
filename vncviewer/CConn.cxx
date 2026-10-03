@@ -25,6 +25,9 @@
 #include <assert.h>
 #ifndef _WIN32
 #include <unistd.h>
+#include <sys/select.h>
+#else
+#include <winsock2.h>
 #endif
 
 #ifdef HAVE_GNUTLS
@@ -98,6 +101,7 @@ CConn::CConn()
     audioOutput(nullptr),
     updateCount(0), pixelCount(0),
     lastServerEncoding((unsigned int)-1), bpsEstimate(20000000),
+    readWatchActive(false), socketEventCount(0), diagnosticsSocketEvents(0),
     updateInProgress(false), diagnosticsPosition(0), diagnosticsUpdates(0)
 {
   setShared(::shared);
@@ -205,6 +209,7 @@ void CConn::connect(const char* vncServerName, network::Socket* socket)
   }
 
   Fl::add_fd(sock->getFd(), FL_READ | FL_EXCEPT, socketEvent, this);
+  readWatchActive = true;
 
   setServerName(serverHost.c_str());
   setStreams(&sock->inStream(), &sock->outStream());
@@ -285,6 +290,8 @@ void CConn::socketEvent(FL_SOCKET fd, void *data)
   // Stop monitoring the socket for now and start processing incoming
   // data asynchronously
   Fl::remove_fd(fd);
+  cc->readWatchActive = false;
+  cc->socketEventCount++;
   cc->msgTimer.start(0);
 
   // Coalesce data until we're fully done processing things
@@ -357,6 +364,7 @@ void CConn::processNextMsg(core::Timer*)
     when |= FL_WRITE;
 
   Fl::add_fd(sock->getFd(), when, socketEvent, this);
+  readWatchActive = true;
 }
 
 ////////////////////// CConnection callback methods //////////////////////
@@ -1126,17 +1134,43 @@ void CConn::handleDiagnosticsTimeout(void *data)
   unsigned position = self->getPosition();
   unsigned updates = self->getUpdateCount();
 
+  // Probe kernel readiness without consuming data or changing socket state.
+  // A readable socket with no callbacks can distinguish event dispatch
+  // trouble from a server that simply isn't sending anything.
+  fd_set readable;
+  struct timeval timeout = {0, 0};
+  int socketReadable;
+#ifndef _WIN32
+  // POSIX fd_set cannot represent descriptors at or above FD_SETSIZE.
+  if (self->sock->getFd() >= FD_SETSIZE)
+    socketReadable = -2;
+  else
+#endif
+  {
+    FD_ZERO(&readable);
+    FD_SET(self->sock->getFd(), &readable);
+    socketReadable = select(self->sock->getFd() + 1, &readable,
+                            nullptr, nullptr, &timeout);
+  }
+
   vlog.info("[ConnectionDiagnostics] interval_ms=%lld rx_bytes=%u "
             "updates=%u last_update_ms=%lld partial_update_ms=%lld "
             "rx_buffered=%llu tx_buffered=%d processing=%d "
-            "protocol_state=%d consumed_bytes=%llu",
+            "protocol_state=%d consumed_bytes=%llu "
+            "update_pending=%d continuous=%d pixel_format_pending=%d "
+            "read_watch=%d socket_readable=%d socket_events=%u",
             (long long)interval, position - self->diagnosticsPosition,
             updates - self->diagnosticsUpdates, (long long)updateAge,
             partialAge, (unsigned long long)self->sock->inStream().avail(),
             self->sock->outStream().hasBufferedData(),
             self->msgTimer.isStarted(), (int)self->state(),
-            (unsigned long long)self->sock->inStream().pos());
+            (unsigned long long)self->sock->inStream().pos(),
+            self->hasPendingUpdate(), self->usesContinuousUpdates(),
+            self->hasPendingPixelFormatChange(), self->readWatchActive,
+            socketReadable,
+            self->socketEventCount - self->diagnosticsSocketEvents);
 
+  self->diagnosticsSocketEvents = self->socketEventCount;
   self->diagnosticsPosition = position;
   self->diagnosticsUpdates = updates;
   self->diagnosticsTime = now;
