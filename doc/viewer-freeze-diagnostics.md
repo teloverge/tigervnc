@@ -120,3 +120,21 @@ that framebuffer updates are arriving.
 A new `TigerVNC Diagnostics v2` shortcut points to
 `D:\Apps\TigerVNC\Start-ViewerDiagnostics-v2.ps1`. Close the old viewer
 session before using it, and leave the launcher running while connected.
+
+## Confirmed lack of visible response (2026-10-02, approximately 23:33)
+
+Session `20261002-232637-26248` captured actual viewer logs successfully.
+At zero throughput, clicking the Mac menu / moving over its Dock produced
+no visible response or traffic, according to the user. The viewer remained
+responsive and its TCP session remained ESTABLISHED across the report.
+Its log had no disconnect or protocol error; the last entry was an automatic
+quality adjustment at 23:29. At 23:35 a new unauthenticated connection still
+received the Mac's `RFB 003.889` greeting. This rules out a complete failure
+to accept new VNC connections, but does not prove the existing session's
+network path, server update stream, or decoder is healthy.
+
+Snapshots are stored locally in `build/diagnostics/20261002-2333` (excluded
+from git). A Windows viewer build with the connection-progress diagnostics
+is required to distinguish incomplete updates from lack of incoming data.
+The Windows viewer diagnostics workflow packages the executable and its
+runtime libraries separately from the installed stock viewer.

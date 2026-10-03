@@ -1,0 +1,54 @@
+name: Windows viewer diagnostics
+
+on:
+  push:
+    branches: [viewer/freeze-diagnostics]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  viewer:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            make
+            mingw-w64-ucrt-x86_64-toolchain
+            mingw-w64-ucrt-x86_64-cmake
+            mingw-w64-ucrt-x86_64-fltk1.3
+            mingw-w64-ucrt-x86_64-libjpeg-turbo
+            mingw-w64-ucrt-x86_64-gnutls
+            mingw-w64-ucrt-x86_64-pixman
+            mingw-w64-ucrt-x86_64-nettle
+      - name: Build viewer
+        run: |
+          cmake -G "MSYS Makefiles" -S . -B build \
+            -DCMAKE_BUILD_TYPE=Debug -DBUILD_VIEWER=ON -DBUILD_WINVNC=OFF \
+            -DENABLE_NETTLE=ON -DENABLE_GNUTLS=ON \
+            -DENABLE_NLS=OFF -DENABLE_H264=OFF -DENABLE_AUDIO=OFF
+          cmake --build build --target vncviewer --parallel 4
+      - name: Package viewer and runtime libraries
+        run: |
+          mkdir -p viewer-diagnostics
+          cp build/vncviewer/vncviewer.exe viewer-diagnostics/
+          cp contrib/Start-ViewerDiagnostics.ps1 viewer-diagnostics/
+          cp LICENCE.TXT doc/viewer-freeze-diagnostics.md viewer-diagnostics/
+          ldd build/vncviewer/vncviewer.exe > build/viewer-dependencies.txt
+          cat build/viewer-dependencies.txt
+          if grep -q 'not found' build/viewer-dependencies.txt; then exit 1; fi
+          awk '$3 ~ /^\/ucrt64\// { print $3 }' build/viewer-dependencies.txt |
+            while IFS= read -r dll; do cp "$dll" viewer-diagnostics/; done
+      - uses: actions/upload-artifact@v7
+        with:
+          name: viewer-diagnostics-windows
+          path: viewer-diagnostics/
