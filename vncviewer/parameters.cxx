@@ -256,6 +256,13 @@ core::StringParameter
   via("via", _("SSH gateway to tunnel the connection via"), "");
 #endif
 
+core::BoolParameter
+  showStats("ShowStats", _("Show incoming traffic and framebuffer update rates"),
+            false);
+core::BoolParameter
+  connectionDiagnostics("ConnectionDiagnostics",
+                        _("Log connection progress every five seconds"), false);
+
 static const char* IDENTIFIER_STRING = "TigerVNC Configuration file Version 1.0";
 
 /*
@@ -272,6 +279,7 @@ static core::VoidParameter* parameterArray[] = {
   /* Misc. */
   &reconnectOnError,
   &shared,
+  &showStats,
 #ifdef HAVE_AUDIO
   &playAudio,
 #endif

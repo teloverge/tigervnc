@@ -20,6 +20,8 @@
 #ifndef __CCONN_H__
 #define __CCONN_H__
 
+#include <chrono>
+
 #include <FL/Fl.H>
 
 #include <core/Timer.h>
@@ -102,6 +104,7 @@ private:
   static void handleOptions(void *data);
 
   static void handleUpdateTimeout(void *data);
+  static void handleDiagnosticsTimeout(void *data);
 
 private:
   std::string serverHost;
@@ -123,6 +126,13 @@ private:
   struct timeval updateStartTime;
   size_t updateStartPos;
   unsigned long long bpsEstimate;
+
+  bool updateInProgress;
+  unsigned diagnosticsPosition;
+  unsigned diagnosticsUpdates;
+  std::chrono::steady_clock::time_point diagnosticsTime;
+  std::chrono::steady_clock::time_point lastCompletedUpdate;
+  std::chrono::steady_clock::time_point currentUpdateStart;
 
   static std::string savedUsername;
   static std::string savedPassword;

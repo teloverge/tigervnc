@@ -359,6 +359,7 @@ void OptionsDialog::loadOptions(void)
 
   /* Misc. */
   sharedCheckbox->value(shared);
+  statsCheckbox->value(showStats);
   reconnectCheckbox->value(reconnectOnError);
 #ifdef HAVE_AUDIO
   audioCheckbox->value(playAudio);
@@ -517,6 +518,7 @@ void OptionsDialog::storeOptions(void)
 
   /* Misc. */
   shared.setParam(sharedCheckbox->value());
+  showStats.setParam(statsCheckbox->value());
   reconnectOnError.setParam(reconnectCheckbox->value());
 #ifdef HAVE_AUDIO
   playAudio.setParam(audioCheckbox->value());
@@ -1249,6 +1251,11 @@ void OptionsDialog::createMiscPage(int tx, int ty, int tw, int th)
                                                   CHECK_MIN_WIDTH,
                                                   CHECK_HEIGHT,
                                                   _("Shared (don't disconnect other viewers)")));
+  ty += CHECK_HEIGHT + TIGHT_MARGIN;
+
+  statsCheckbox = new Fl_Check_Button(LBLRIGHT(tx, ty,
+                                              CHECK_MIN_WIDTH, CHECK_HEIGHT,
+                                              _("Show incoming traffic meter")));
   ty += CHECK_HEIGHT + TIGHT_MARGIN;
 
   reconnectCheckbox = new Fl_Check_Button(LBLRIGHT(tx, ty,

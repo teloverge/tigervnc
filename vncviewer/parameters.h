@@ -63,6 +63,8 @@ extern core::BoolParameter listenMode;
 
 extern core::BoolParameter viewOnly;
 extern core::BoolParameter shared;
+extern core::BoolParameter showStats;
+extern core::BoolParameter connectionDiagnostics;
 
 #ifdef HAVE_AUDIO
 extern core::BoolParameter playAudio;

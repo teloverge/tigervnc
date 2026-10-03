@@ -165,6 +165,7 @@ protected:
 
   /* Misc. */
   Fl_Check_Button *sharedCheckbox;
+  Fl_Check_Button *statsCheckbox;
   Fl_Check_Button *reconnectCheckbox;
 #ifdef HAVE_AUDIO
   Fl_Check_Button *audioCheckbox;

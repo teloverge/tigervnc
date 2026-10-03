@@ -121,6 +121,7 @@ private:
   static void handleScroll(Fl_Widget *wnd, void *data);
   static void handleEdgeScroll(void *data);
 
+  void updateStatsVisibility();
   static void handleStatsTimeout(void *data);
 
 private:
@@ -155,7 +156,7 @@ private:
   struct statsEntry {
     unsigned ups;
     unsigned pps;
-    unsigned bps;
+    double bps;
   };
   struct statsEntry stats[100];
 
