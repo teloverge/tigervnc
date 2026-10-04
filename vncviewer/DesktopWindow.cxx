@@ -89,7 +89,7 @@ DesktopWindow::DesktopWindow(int w, int h, CConn* cc_)
     pendingRemoteResize(false), lastResize({0, 0}),
     keyboardGrabbed(false), mouseGrabbed(false), regrabOnFocus(false),
     statsLastUpdates(0), statsLastPixels(0), statsLastPosition(0),
-    statsGraph(nullptr)
+    statsGraph(nullptr), statsPositioned(false), statsDragging(false)
 {
   Fl_Group* group;
 
@@ -492,9 +492,10 @@ void DesktopWindow::draw()
   // Debug graph (if active)
   if (statsGraph) {
     int ox, oy, ow, oh;
+    core::Point pos = statsGraphPosition();
 
-    ox = X = w() - statsGraph->width() - 30;
-    oy = Y = h() - statsGraph->height() - 30;
+    ox = X = pos.x;
+    oy = Y = pos.y;
     ow = statsGraph->width();
     oh = statsGraph->height();
 
@@ -848,6 +849,43 @@ void DesktopWindow::updateOverlay(void *data)
 
 int DesktopWindow::handle(int event)
 {
+  // Capture the whole gesture locally so dragging the monitor does not
+  // send mouse button events to the remote desktop.
+  if (statsDragging) {
+    switch (event) {
+    case FL_DRAG:
+      statsPosition = {Fl::event_x() - statsDragOffset.x,
+                       Fl::event_y() - statsDragOffset.y};
+      statsPosition = statsGraphPosition();
+      redraw();
+      return 1;
+    case FL_RELEASE:
+      if (!(Fl::event_state() & FL_BUTTONS))
+        statsDragging = false;
+      return 1;
+    case FL_PUSH:
+      return 1;
+    }
+  }
+
+  if ((event == FL_PUSH) && statsGraph &&
+      (Fl::event_button() == FL_LEFT_MOUSE) &&
+      ((Fl::event_state() & FL_BUTTONS) == FL_BUTTON1)) {
+    core::Point pos = statsGraphPosition();
+    if ((Fl::event_x() >= pos.x) &&
+        (Fl::event_x() < pos.x + statsGraph->width()) &&
+        (Fl::event_y() >= pos.y) &&
+        (Fl::event_y() < pos.y + statsGraph->height())) {
+      statsPosition = pos;
+      statsPositioned = true;
+      statsDragging = true;
+      statsDragOffset = {Fl::event_x() - pos.x, Fl::event_y() - pos.y};
+      Fl::remove_timeout(handleEdgeScroll, this);
+      Fl::pushed(this);
+      return 1;
+    }
+  }
+
   switch (event) {
   case FL_FULLSCREEN:
     fullScreen.setParam(fullscreen_active());
@@ -1686,6 +1724,22 @@ void DesktopWindow::handleEdgeScroll(void *data)
   self->scrollTo(self->hscroll->value() - dx, self->vscroll->value() - dy);
 
   Fl::repeat_timeout(EDGE_SCROLL_SECONDS_PER_FRAME, handleEdgeScroll, data);
+}
+
+core::Point DesktopWindow::statsGraphPosition() const
+{
+  if (!statsGraph)
+    return statsPosition;
+
+  int width = w() - (vscroll->visible() ? vscroll->w() : 0);
+  int height = h() - (hscroll->visible() ? hscroll->h() : 0);
+  core::Point pos = statsPositioned ? statsPosition :
+    core::Point(w() - statsGraph->width() - 30,
+                h() - statsGraph->height() - 30);
+
+  pos.x = std::max(0, std::min(pos.x, width - statsGraph->width()));
+  pos.y = std::max(0, std::min(pos.y, height - statsGraph->height()));
+  return pos;
 }
 
 void DesktopWindow::updateStatsVisibility()

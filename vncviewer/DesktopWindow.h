@@ -122,6 +122,7 @@ private:
   static void handleEdgeScroll(void *data);
 
   void updateStatsVisibility();
+  core::Point statsGraphPosition() const;
   static void handleStatsTimeout(void *data);
 
 private:
@@ -166,6 +167,10 @@ private:
   unsigned statsLastPosition;
 
   Surface *statsGraph;
+  bool statsPositioned;
+  bool statsDragging;
+  core::Point statsPosition;
+  core::Point statsDragOffset;
 };
 
 #endif
