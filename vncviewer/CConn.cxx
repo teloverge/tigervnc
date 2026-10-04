@@ -25,6 +25,9 @@
 #include <assert.h>
 #ifndef _WIN32
 #include <unistd.h>
+#include <sys/select.h>
+#else
+#include <winsock2.h>
 #endif
 
 #ifdef HAVE_GNUTLS
@@ -97,7 +100,9 @@ CConn::CConn()
     msgTimer(this, &CConn::processNextMsg), desktop(nullptr),
     audioOutput(nullptr),
     updateCount(0), pixelCount(0),
-    lastServerEncoding((unsigned int)-1), bpsEstimate(20000000)
+    lastServerEncoding((unsigned int)-1), bpsEstimate(20000000),
+    readWatchActive(false), socketEventCount(0), diagnosticsSocketEvents(0),
+    updateInProgress(false), diagnosticsPosition(0), diagnosticsUpdates(0)
 {
   setShared(::shared);
 
@@ -130,6 +135,7 @@ CConn::~CConn()
 
   OptionsDialog::removeCallback(handleOptions);
   Fl::remove_timeout(handleUpdateTimeout, this);
+  Fl::remove_timeout(handleDiagnosticsTimeout, this);
 
   if (desktop)
     delete desktop;
@@ -203,6 +209,7 @@ void CConn::connect(const char* vncServerName, network::Socket* socket)
   }
 
   Fl::add_fd(sock->getFd(), FL_READ | FL_EXCEPT, socketEvent, this);
+  readWatchActive = true;
 
   setServerName(serverHost.c_str());
   setStreams(&sock->inStream(), &sock->outStream());
@@ -268,7 +275,9 @@ unsigned CConn::getPixelCount()
 
 unsigned CConn::getPosition()
 {
-  return sock->inStream().pos();
+  // Include buffered data: bytes received, rather than only bytes consumed.
+  // This measures socket payload, including TLS overhead, but excludes TCP/IP.
+  return sock->inStream().pos() + sock->inStream().avail();
 }
 
 void CConn::socketEvent(FL_SOCKET fd, void *data)
@@ -281,6 +290,8 @@ void CConn::socketEvent(FL_SOCKET fd, void *data)
   // Stop monitoring the socket for now and start processing incoming
   // data asynchronously
   Fl::remove_fd(fd);
+  cc->readWatchActive = false;
+  cc->socketEventCount++;
   cc->msgTimer.start(0);
 
   // Coalesce data until we're fully done processing things
@@ -292,6 +303,7 @@ void CConn::processNextMsg(core::Timer*)
   static bool recursing = false;
   bool again;
   int when;
+  auto started = std::chrono::steady_clock::now();
 
   // I don't think processMsg() is recursion safe, so add this check
   assert(!recursing);
@@ -330,6 +342,14 @@ void CConn::processNextMsg(core::Timer*)
 
   recursing = false;
 
+  if (connectionDiagnostics) {
+    auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+      std::chrono::steady_clock::now() - started).count();
+    if (elapsed >= 1000)
+      vlog.info("[ConnectionDiagnostics] message processing took %lld ms",
+                (long long)elapsed);
+  }
+
   if (again) {
     msgTimer.repeat();
     return;
@@ -344,6 +364,7 @@ void CConn::processNextMsg(core::Timer*)
     when |= FL_WRITE;
 
   Fl::add_fd(sock->getFd(), when, socketEvent, this);
+  readWatchActive = true;
 }
 
 ////////////////////// CConnection callback methods //////////////////////
@@ -442,6 +463,14 @@ void CConn::initDone()
   // Force a switch to the format and encoding we'd like
   updateEncoding();
   updatePixelFormat();
+
+  if (connectionDiagnostics) {
+    diagnosticsTime = lastCompletedUpdate = std::chrono::steady_clock::now();
+    diagnosticsPosition = getPosition();
+    diagnosticsUpdates = getUpdateCount();
+    vlog.info("[ConnectionDiagnostics] enabled; idle desktops may have no updates");
+    Fl::add_timeout(5.0, handleDiagnosticsTimeout, this);
+  }
 }
 
 bool CConn::verifyCertificate(unsigned int status,
@@ -831,6 +860,9 @@ void CConn::framebufferUpdateStart()
 {
   CConnection::framebufferUpdateStart();
 
+  updateInProgress = true;
+  currentUpdateStart = std::chrono::steady_clock::now();
+
   // For bandwidth estimate
   gettimeofday(&updateStartTime, nullptr);
   updateStartPos = sock->inStream().pos();
@@ -851,6 +883,8 @@ void CConn::framebufferUpdateEnd()
   CConnection::framebufferUpdateEnd();
 
   updateCount++;
+  updateInProgress = false;
+  lastCompletedUpdate = std::chrono::steady_clock::now();
 
   // Calculate bandwidth everything managed to maintain during this update
   gettimeofday(&now, nullptr);
@@ -1084,4 +1118,61 @@ void CConn::handleUpdateTimeout(void *data)
   self->desktop->updateWindow();
 
   Fl::repeat_timeout(1.0, handleUpdateTimeout, data);
+}
+
+void CConn::handleDiagnosticsTimeout(void *data)
+{
+  CConn *self = (CConn*)data;
+  auto now = std::chrono::steady_clock::now();
+  auto interval = std::chrono::duration_cast<std::chrono::milliseconds>(
+    now - self->diagnosticsTime).count();
+  auto updateAge = std::chrono::duration_cast<std::chrono::milliseconds>(
+    now - self->lastCompletedUpdate).count();
+  long long partialAge = self->updateInProgress ?
+    std::chrono::duration_cast<std::chrono::milliseconds>(
+      now - self->currentUpdateStart).count() : 0;
+  unsigned position = self->getPosition();
+  unsigned updates = self->getUpdateCount();
+
+  // Probe kernel readiness without consuming data or changing socket state.
+  // A readable socket with no callbacks can distinguish event dispatch
+  // trouble from a server that simply isn't sending anything.
+  fd_set readable;
+  struct timeval timeout = {0, 0};
+  int socketReadable;
+#ifndef _WIN32
+  // POSIX fd_set cannot represent descriptors at or above FD_SETSIZE.
+  if (self->sock->getFd() >= FD_SETSIZE)
+    socketReadable = -2;
+  else
+#endif
+  {
+    FD_ZERO(&readable);
+    FD_SET(self->sock->getFd(), &readable);
+    socketReadable = select(self->sock->getFd() + 1, &readable,
+                            nullptr, nullptr, &timeout);
+  }
+
+  vlog.info("[ConnectionDiagnostics] interval_ms=%lld rx_bytes=%u "
+            "updates=%u last_update_ms=%lld partial_update_ms=%lld "
+            "rx_buffered=%llu tx_buffered=%d processing=%d "
+            "protocol_state=%d consumed_bytes=%llu "
+            "update_pending=%d continuous=%d pixel_format_pending=%d "
+            "read_watch=%d socket_readable=%d socket_events=%u",
+            (long long)interval, position - self->diagnosticsPosition,
+            updates - self->diagnosticsUpdates, (long long)updateAge,
+            partialAge, (unsigned long long)self->sock->inStream().avail(),
+            self->sock->outStream().hasBufferedData(),
+            self->msgTimer.isStarted(), (int)self->state(),
+            (unsigned long long)self->sock->inStream().pos(),
+            self->hasPendingUpdate(), self->usesContinuousUpdates(),
+            self->hasPendingPixelFormatChange(), self->readWatchActive,
+            socketReadable,
+            self->socketEventCount - self->diagnosticsSocketEvents);
+
+  self->diagnosticsSocketEvents = self->socketEventCount;
+  self->diagnosticsPosition = position;
+  self->diagnosticsUpdates = updates;
+  self->diagnosticsTime = now;
+  Fl::repeat_timeout(5.0, handleDiagnosticsTimeout, data);
 }

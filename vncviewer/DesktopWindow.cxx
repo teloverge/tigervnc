@@ -225,11 +225,7 @@ DesktopWindow::DesktopWindow(int w, int h, CConn* cc_)
   // Adjust layout now that we're visible and know our final size
   repositionWidgets();
 
-  // Throughput graph for debugging
-  if (vlog.getLevel() >= core::LogWriter::LEVEL_DEBUG) {
-    memset(&stats, 0, sizeof(stats));
-    Fl::add_timeout(0, handleStatsTimeout, this);
-  }
+  updateStatsVisibility();
 
   // Show hint about menu shortcut
   unsigned modifierMask;
@@ -1585,6 +1581,7 @@ void DesktopWindow::handleOptions(void *data)
     self->fullscreen_on();
   else if (!fullScreen && self->fullscreen_active())
     self->fullscreen_off();
+  self->updateStatsVisibility();
 }
 
 void DesktopWindow::handleFullscreenTimeout(void *data)
@@ -1678,6 +1675,26 @@ void DesktopWindow::handleEdgeScroll(void *data)
   Fl::repeat_timeout(EDGE_SCROLL_SECONDS_PER_FRAME, handleEdgeScroll, data);
 }
 
+void DesktopWindow::updateStatsVisibility()
+{
+  bool visible = showStats ||
+                 vlog.getLevel() >= core::LogWriter::LEVEL_DEBUG;
+
+  if (visible && !Fl::has_timeout(handleStatsTimeout, this)) {
+    memset(&stats, 0, sizeof(stats));
+    gettimeofday(&statsLastTime, nullptr);
+    statsLastUpdates = cc->getUpdateCount();
+    statsLastPixels = cc->getPixelCount();
+    statsLastPosition = cc->getPosition();
+    Fl::add_timeout(0.5, handleStatsTimeout, this);
+  } else if (!visible) {
+    Fl::remove_timeout(handleStatsTimeout, this);
+    delete statsGraph;
+    statsGraph = nullptr;
+    redraw();
+  }
+}
+
 void DesktopWindow::handleStatsTimeout(void *data)
 {
   DesktopWindow *self = (DesktopWindow*)data;
@@ -1695,7 +1712,8 @@ void DesktopWindow::handleStatsTimeout(void *data)
   Fl_Image_Surface *surface;
   Fl_RGB_Image *image;
 
-  unsigned maxUPS, maxPPS, maxBPS;
+  unsigned maxUPS, maxPPS;
+  double maxBPS;
   size_t i;
 
   char buffer[256];
@@ -1711,7 +1729,8 @@ void DesktopWindow::handleStatsTimeout(void *data)
 
   self->stats[statsCount-1].ups = (updates - self->statsLastUpdates) * 1000 / elapsed;
   self->stats[statsCount-1].pps = (pixels - self->statsLastPixels) * 1000 / elapsed;
-  self->stats[statsCount-1].bps = (pos - self->statsLastPosition) * 1000 / elapsed;
+  self->stats[statsCount-1].bps =
+    (double)(pos - self->statsLastPosition) * 1000 / elapsed;
 
   gettimeofday(&self->statsLastTime, nullptr);
   self->statsLastUpdates = updates;
@@ -1765,9 +1784,9 @@ void DesktopWindow::handleStatsTimeout(void *data)
     fl_color(FL_RED);
     for (i = 0;i < statsCount-1;i++) {
       fl_line(5 + i * graphWidth / statsCount,
-              5 + graphHeight - graphHeight * self->stats[i].bps / maxBPS,
+              5 + graphHeight - (int)(graphHeight * self->stats[i].bps / maxBPS),
               5 + (i+1) * graphWidth / statsCount,
-              5 + graphHeight - graphHeight * self->stats[i+1].bps / maxBPS);
+              5 + graphHeight - (int)(graphHeight * self->stats[i+1].bps / maxBPS));
     }
   }
 

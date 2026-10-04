@@ -246,10 +246,23 @@ Xvnc supports reverse connections with a helper program called
 .TP
 .B \-Log \fIlogname\fP:\fIdest\fP:\fIlevel\fP[, ...]
 Configures the debug log settings.  \fIdest\fP can currently be \fBstderr\fP or
-\fBstdout\fP, and \fIlevel\fP is between 0 and 100, 100 meaning most verbose
-output.  \fIlogname\fP is usually \fB*\fP meaning all, but you can target a
+\fBstdout\fP or \fBfile\fP, and \fIlevel\fP is between 0 and 100,
+100 meaning most verbose output.  \fIlogname\fP is usually \fB*\fP meaning all, but you can target a
 specific source file if you know the name of its "LogWriter".  Default is
 \fB*:stderr:30\fP.
+.
+.TP
+.B \-ShowStats
+Show a live incoming traffic meter with framebuffer updates per second,
+pixels per second, and incoming socket payload bits per second. Default is off.
+.
+.TP
+.B \-ConnectionDiagnostics
+Log connection progress every five seconds and message-processing callbacks
+that take at least one second. Idle desktops may legitimately have no updates.
+Use \-Log *:file:30 to retain these records in vncviewer.log in the temporary
+directory (TMP on Windows, /tmp on other platforms). Default is off.
+
 .
 .TP
 .B \-LowColorLevel, \-LowColourLevel \fIlevel\fP

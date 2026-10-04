@@ -308,6 +308,11 @@ namespace rfb {
 
     ModifiablePixelBuffer* getFramebuffer() { return framebuffer; }
 
+    // Read-only progress state for client diagnostics.
+    bool hasPendingUpdate() const { return pendingUpdate; }
+    bool usesContinuousUpdates() const { return continuousUpdates; }
+    bool hasPendingPixelFormatChange() const { return pendingPFChange; }
+
   protected:
     // Optional capabilities that a subclass is expected to set to true
     // if supported
