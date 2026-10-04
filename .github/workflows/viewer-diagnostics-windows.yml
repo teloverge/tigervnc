@@ -57,3 +57,17 @@ jobs:
         with:
           name: viewer-diagnostics-windows
           path: viewer-diagnostics/
+      - name: Build release viewer for desktop use
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --target vncviewer --parallel 4
+          mkdir -p viewer-windows
+          cp build/vncviewer/vncviewer.exe LICENCE.TXT viewer-windows/
+          ldd build/vncviewer/vncviewer.exe > build/viewer-release-dependencies.txt
+          if grep -q 'not found' build/viewer-release-dependencies.txt; then exit 1; fi
+          awk '$3 ~ /^\/ucrt64\// { print $3 }' build/viewer-release-dependencies.txt |
+            while IFS= read -r dll; do cp "$dll" viewer-windows/; done
+      - uses: actions/upload-artifact@v7
+        with:
+          name: viewer-windows
+          path: viewer-windows/
