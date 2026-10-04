@@ -2,7 +2,9 @@ name: Windows viewer diagnostics
 
 on:
   push:
-    branches: [viewer/freeze-diagnostics]
+    branches: [master, viewer/freeze-diagnostics]
+  pull_request:
+    branches: [master]
   workflow_dispatch:
 
 permissions:
@@ -48,6 +50,9 @@ jobs:
           if grep -q 'not found' build/viewer-dependencies.txt; then exit 1; fi
           awk '$3 ~ /^\/ucrt64\// { print $3 }' build/viewer-dependencies.txt |
             while IFS= read -r dll; do cp "$dll" viewer-diagnostics/; done
+      - name: Test update progress diagnostics
+        shell: pwsh
+        run: python tests/integration/viewer-diagnostics.py viewer-diagnostics/vncviewer.exe
       - uses: actions/upload-artifact@v7
         with:
           name: viewer-diagnostics-windows
