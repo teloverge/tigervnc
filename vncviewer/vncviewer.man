@@ -254,7 +254,8 @@ specific source file if you know the name of its "LogWriter".  Default is
 .TP
 .B \-ShowStats
 Show a live incoming traffic meter with framebuffer updates per second,
-pixels per second, and incoming socket payload bits per second. Default is off.
+pixels per second, and incoming socket payload bits per second. Drag the meter
+with the left mouse button to reposition it. Default is off.
 .
 .TP
 .B \-ConnectionDiagnostics
